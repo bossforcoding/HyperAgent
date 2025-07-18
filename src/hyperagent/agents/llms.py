@@ -241,5 +241,5 @@ if __name__ == "__main__":
         "model": "gradientai/Llama-3-8B-Instruct-Gradient-1048k",
         "system_prompt": "Being an helpful AI, I will help you with your queries. Please ask me anything."
     }
-    llm = OllamaLLM()
-    llm("How to create a new column in pandas dataframe?")
+    llm = create_llm(config)
+    # llm("How to create a new column in pandas dataframe?")
