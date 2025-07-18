@@ -1,9 +1,10 @@
-from typing import Any
-from openai import OpenAI, AzureOpenAI
-from vllm import LLM as vLLM
+import json
+import logging
+from typing import List, Union, Dict, Any, Optional
+
+import requests
 from transformers import AutoTokenizer, AutoConfig
-from groq import Groq
-import os
+
 
 def truncate_tokens_hf(string: str, encoding_name: str) -> str:
     """Truncates a text string based on max number of tokens."""
@@ -13,143 +14,232 @@ def truncate_tokens_hf(string: str, encoding_name: str) -> str:
     num_tokens = len(encoded_string[0])
 
     if num_tokens > max_tokens:
-        string = tokenizer.decode(encoded_string[0][-max_tokens+1000:])
+        string = tokenizer.decode(encoded_string[0][-max_tokens + 1000:])
 
     return string
 
-class LLM:
-    def __init__(self, config):
-        self.system_prompt = config["system_prompt"]
-        self.config = config
-    
-    def __call__(self, *args: Any, **kwds: Any) -> Any:
-        pass
 
-class GroqLLM(LLM):
-    def __init__(self, config):
-        super().__init__(config)
-        self.client = Groq(
-            api_key=os.environ["GROQ_API_KEY"],
-        )
-    
-    def __call__(self, prompt: str):
-        response = self.client.chat.completions.create(
-            messages = [
-                {"role": "system", "content": self.system_prompt},
-                {"role": "user", "content": prompt},
-            ],
-            model = self.config["model"],
-        )
-        return response.choices[0].message.content
+logger = logging.getLogger(__name__)
 
 
-class LocalLLM(LLM):
-    def __init__(self, config):
-        super().__init__(config)
-        openai_api_key = os.environ["TOGETHER_API_KEY"]
-        openai_api_base = "https://api.together.xyz"
-        # openai_api_base = "http://localhost:8004/v1"
-        # openai_api_key="token-abc123"
+class OllamaLLM:
+    """Ollama LLM wrapper for local model inference"""
+
+    def __init__(
+            self,
+            model_name: str = "llama2",
+            base_url: str = "http://localhost:11434",
+            temperature: float = 0.7,
+            max_tokens: int = 2048,
+            stop_sequences: Optional[List[str]] = None,
+            **kwargs
+    ):
+        self.model_name = model_name
+        self.base_url = base_url.rstrip('/')
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+        self.stop_sequences = stop_sequences or []
+
+        # Verifica connessione Ollama
+        self._verify_connection()
+
+        # Verifica che il modello sia disponibile
+        self._verify_model()
+
+    def _verify_connection(self):
+        """Verifica che Ollama sia raggiungibile"""
+        try:
+            response = requests.get(f"{self.base_url}/api/tags", timeout=5)
+            response.raise_for_status()
+            logger.info(f"Successfully connected to Ollama at {self.base_url}")
+        except requests.exceptions.RequestException as e:
+            error_msg = f"Cannot connect to Ollama at {self.base_url}. Make sure Ollama is running."
+            logger.error(error_msg)
+            raise RuntimeError(error_msg) from e
+
+    def _verify_model(self):
+        """Verifica che il modello richiesto sia disponibile"""
+        try:
+            response = requests.get(f"{self.base_url}/api/tags")
+            response.raise_for_status()
+            available_models = [model["name"] for model in response.json().get("models", [])]
+
+            if self.model_name not in available_models:
+                logger.warning(
+                    f"Model '{self.model_name}' not found. Available models: {available_models}"
+                )
+                logger.info(f"Pulling model '{self.model_name}'...")
+                self._pull_model()
+        except Exception as e:
+            logger.error(f"Error verifying model: {e}")
+
+    def _pull_model(self):
+        """Scarica un modello se non disponibile"""
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/pull",
+                json={"name": self.model_name},
+                stream=True
+            )
+            response.raise_for_status()
+
+            for line in response.iter_lines():
+                if line:
+                    data = json.loads(line)
+                    if "status" in data:
+                        logger.info(f"Pulling {self.model_name}: {data['status']}")
+
+            logger.info(f"Successfully pulled model '{self.model_name}'")
+        except Exception as e:
+            logger.error(f"Failed to pull model '{self.model_name}': {e}")
+            raise
+
+    def generate(
+            self,
+            prompt: Union[str, List[str]],
+            temperature: Optional[float] = None,
+            max_tokens: Optional[int] = None,
+            stop_sequences: Optional[List[str]] = None,
+            **kwargs
+    ) -> Union[str, List[str]]:
+        """
+        Generate text using Ollama
+
+        Args:
+            prompt: String or list of strings to generate from
+            temperature: Override default temperature
+            max_tokens: Override default max tokens
+            stop_sequences: Override default stop sequences
+
+        Returns:
+            Generated text (string if single prompt, list if multiple)
+        """
+        single_prompt = isinstance(prompt, str)
+        prompts = [prompt] if single_prompt else prompt
+
+        results = []
+        for p in prompts:
+            result = self._generate_single(
+                p,
+                temperature or self.temperature,
+                max_tokens or self.max_tokens,
+                stop_sequences or self.stop_sequences
+            )
+            results.append(result)
+
+        return results[0] if single_prompt else results
+
+    def _generate_single(
+            self,
+            prompt: str,
+            temperature: float,
+            max_tokens: int,
+            stop_sequences: List[str]
+    ) -> str:
+        """Generate text for a single prompt"""
+        payload = {
+            "model": self.model_name,
+            "prompt": prompt,
+            "stream": False,
+            "options": {
+                "temperature": temperature,
+                "num_predict": max_tokens,
+            }
+        }
+
+        if stop_sequences:
+            payload["options"]["stop"] = stop_sequences
+
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/generate",
+                json=payload,
+                timeout=300  # 5 minuti timeout per generazioni lunghe
+            )
+            response.raise_for_status()
+
+            result = response.json()
+            return result.get("response", "")
+
+        except requests.exceptions.Timeout:
+            logger.error(f"Timeout generating response for prompt: {prompt[:100]}...")
+            raise
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error generating response: {e}")
+            raise
+
+    def chat(
+            self,
+            messages: List[Dict[str, str]],
+            temperature: Optional[float] = None,
+            max_tokens: Optional[int] = None,
+            **kwargs
+    ) -> str:
+        """
+        Chat completion using Ollama
+
+        Args:
+            messages: List of message dicts with 'role' and 'content'
+            temperature: Override default temperature
+            max_tokens: Override default max tokens
+
+        Returns:
+            Generated response
+        """
+        payload = {
+            "model": self.model_name,
+            "messages": messages,
+            "stream": False,
+            "options": {
+                "temperature": temperature or self.temperature,
+                "num_predict": max_tokens or self.max_tokens,
+            }
+        }
+
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/chat",
+                json=payload,
+                timeout=300
+            )
+            response.raise_for_status()
+
+            result = response.json()
+            return result.get("message", {}).get("content", "")
+
+        except Exception as e:
+            logger.error(f"Error in chat completion: {e}")
+            raise
 
 
-        self.client = OpenAI(
-            api_key=openai_api_key,
-            base_url=openai_api_base,
-        )
-
-    def __call__(self, prompt: str):
-        prompt = truncate_tokens_hf(prompt, encoding_name=self.config["model"])
-        response = self.client.chat.completions.create(
-            temperature=0,
-            model=self.config["model"],
-            messages=[
-                {"role": "system", "content": self.system_prompt},
-                {"role": "user", "content": prompt},
-            ],
-            max_tokens=None
-        )
-        return response.choices[0].message.content
-    
-
-class OpenAILLM(LLM):
-    def __init__(self, config):
-        super().__init__(config)
-        if "openai_api_key" in config:
-            openai_api_key = config["openai_api_key"]
-        elif "OPENAI_API_KEY" in os.environ:
-            openai_api_key = os.environ["OPENAI_API_KEY"]
-        else:
-            assert False, "OpenAI API key not found"
-        self.client = OpenAI(
-            api_key=openai_api_key,
-        )
-
-    def __call__(self, prompt: str):
-        # The line `prompt = truncate_tokens(prompt, encoding_name=self.config["model"],
-        # max_length=self.config["max_tokens"])` is calling a function named `truncate_tokens` with
-        # three arguments: `prompt`, `encoding_name`, and `max_length`. This function is likely used
-        # to truncate the input `prompt` to a specified maximum length based on the model being used
-        # and the maximum tokens allowed.
-        # prompt = truncate_tokens(prompt, encoding_name=self.config["model"], max_length=self.config["max_tokens"])
-        response = self.client.chat.completions.create(
-            temperature=0,
-            model=self.config["model"],
-            messages=[
-                {"role": "system", "content": self.system_prompt},
-                {"role": "user", "content": prompt},
-            ]
-        )
-        return response.choices[0].message.content
+# Alias per compatibilità
+LocalLLM = OllamaLLM
 
 
-class AzureLLM(LLM):
-    def __init__(self, config):
-        super().__init__(config)
-        if "openai_api_key" in config:
-            openai_api_key = config["openai_api_key"]
-        elif "OPENAI_API_KEY" in os.environ:
-            openai_api_key = os.environ["OPENAI_API_KEY"]
-        else:
-            assert False, "OpenAI API key not found"
+# Factory function per creare LLM
+def create_llm(config: Dict[str, Any]) -> OllamaLLM:
+    """
+    Create an Ollama LLM instance from configuration
 
-        self.client = AzureOpenAI(
-            azure_endpoint=os.environ["AZURE_ENDPOINT_GPT35"] if "gpt35" in self.config["model"] else os.environ["AZURE_ENDPOINT_GPT4"],
-            api_key=openai_api_key,
-            api_version=os.environ["API_VERSION"],
-            azure_deployment="ai4code-research-gpt4o"
-        )
+    Args:
+        config: Configuration dictionary
 
-    def __call__(self, prompt: str):
-        # prompt = truncate_tokens(prompt, encoding_name=self.config["model"], max_length=self.config["max_tokens"])
-        response = self.client.chat.completions.create(
-            temperature=0,
-            model=self.config["model"],
-            messages=[
-                {"role": "system", "content": self.system_prompt},
-                {"role": "user", "content": prompt},
-            ]
-        )
-        return response.choices[0].message.content
+    Returns:
+        OllamaLLM instance
+    """
+    return OllamaLLM(
+        model_name=config.get("model", "llama2"),
+        base_url=config.get("base_url", "http://localhost:11434"),
+        temperature=config.get("temperature", 0.7),
+        max_tokens=config.get("max_tokens", 2048),
+        stop_sequences=config.get("stop_sequences", [])
+    )
 
-class VLLM(LLM):
-    def __init__(self, config):
-        super().__init__(config)
-        self.client = vLLM(
-            model = config["model"], 
-            tensor_parallel_size = 2,
-        )
-        self.system_prompt = config["system_prompt"]
-    
-    def __call__(self, prompt: str):
-        composed_prompt = f"{self.system_prompt} {prompt}"
-        response = self.client.generate(composed_prompt)
-        return response[0].outputs[0].text
-    
-    
+
 if __name__ == "__main__":
     config = {
         "model": "gradientai/Llama-3-8B-Instruct-Gradient-1048k",
         "system_prompt": "Being an helpful AI, I will help you with your queries. Please ask me anything."
     }
-    llm = VLLM(config)
+    llm = OllamaLLM()
     llm("How to create a new column in pandas dataframe?")
