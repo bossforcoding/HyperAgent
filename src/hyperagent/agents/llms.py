@@ -24,23 +24,24 @@ def truncate_tokens_hf(string: str, encoding_name: str) -> str:
 logger = logging.getLogger(__name__)
 
 
-class OllamaLLM:
+class LLM:
+    def __init__(self, config):
+        self.system_prompt = config["system_prompt"]
+        self.config = config
+
+    def __call__(self, *args: Any, **kwds: Any) -> Any:
+        pass
+
+
+class OllamaLLM(LLM):
     """Ollama LLM wrapper for local model inference"""
 
-    def __init__(
-            self,
-            model_name: str = "llama2",
-            base_url: str = constants.OLLAMA_URL,
-            temperature: float = 0.7,
-            max_tokens: int = 2048,
-            stop_sequences: Optional[List[str]] = None,
-            **kwargs
-    ):
-        self.model_name = model_name["model"]
+    def __init__(self, config, base_url: str = constants.OLLAMA_URL):
+        super().__init__(config)
+        self.model_name = self.config["model"]
         self.base_url = base_url.rstrip('/')
-        self.temperature = temperature
-        self.max_tokens = max_tokens
-        self.stop_sequences = stop_sequences or []
+        # self.temperature = temperature
+        self.max_tokens = self.config["max_tokens"]
 
         # Verifica connessione Ollama
         self._verify_connection()
@@ -96,152 +97,35 @@ class OllamaLLM:
             logger.error(f"Failed to pull model '{self.model_name}': {e}")
             raise
 
-    def generate(
-            self,
-            prompt: Union[str, List[str]],
-            temperature: Optional[float] = None,
-            max_tokens: Optional[int] = None,
-            stop_sequences: Optional[List[str]] = None,
-            **kwargs
-    ) -> Union[str, List[str]]:
-        """
-        Generate text using Ollama
+    def __call__(self, prompt: str):
 
-        Args:
-            prompt: String or list of strings to generate from
-            temperature: Override default temperature
-            max_tokens: Override default max tokens
-            stop_sequences: Override default stop sequences
-
-        Returns:
-            Generated text (string if single prompt, list if multiple)
-        """
-        single_prompt = isinstance(prompt, str)
-        prompts = [prompt] if single_prompt else prompt
-
-        results = []
-        for p in prompts:
-            result = self._generate_single(
-                p,
-                temperature or self.temperature,
-                max_tokens or self.max_tokens,
-                stop_sequences or self.stop_sequences
-            )
-            results.append(result)
-
-        return results[0] if single_prompt else results
-
-    def _generate_single(
-            self,
-            prompt: str,
-            temperature: float,
-            max_tokens: int,
-            stop_sequences: List[str]
-    ) -> str:
-        """Generate text for a single prompt"""
         payload = {
             "model": self.model_name,
-            "prompt": prompt,
-            "stream": False,
-            "options": {
-                "temperature": temperature,
-                "num_predict": max_tokens,
-            }
+            "messages": [
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": prompt},
+            ],
+            "stream": False  # Impostato a False per ricevere la risposta completa in una volta
         }
 
-        if stop_sequences:
-            payload["options"]["stop"] = stop_sequences
-
-        try:
-            response = requests.post(
-                f"{self.base_url}/api/generate",
-                json=payload,
-                timeout=300  # 5 minuti timeout per generazioni lunghe
-            )
-            response.raise_for_status()
-
-            result = response.json()
-            return result.get("response", "")
-
-        except requests.exceptions.Timeout:
-            logger.error(f"Timeout generating response for prompt: {prompt[:100]}...")
-            raise
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error generating response: {e}")
-            raise
-
-    def chat(
-            self,
-            messages: List[Dict[str, str]],
-            temperature: Optional[float] = None,
-            max_tokens: Optional[int] = None,
-            **kwargs
-    ) -> str:
-        """
-        Chat completion using Ollama
-
-        Args:
-            messages: List of message dicts with 'role' and 'content'
-            temperature: Override default temperature
-            max_tokens: Override default max tokens
-
-        Returns:
-            Generated response
-        """
-        payload = {
-            "model": self.model_name,
-            "messages": messages,
-            "stream": False,
-            "options": {
-                "temperature": temperature or self.temperature,
-                "num_predict": max_tokens or self.max_tokens,
-            }
-        }
-
-        try:
-            response = requests.post(
-                f"{self.base_url}/api/chat",
-                json=payload,
-                timeout=300
-            )
-            response.raise_for_status()
-
-            result = response.json()
-            return result.get("message", {}).get("content", "")
-
-        except Exception as e:
-            logger.error(f"Error in chat completion: {e}")
-            raise
+        response = requests.post(
+            # f"{self.base_url}/api/generate",
+            f"{self.base_url}/api/chat",
+            json=payload,
+        )
+    #
+        response_data = response.json()
+        print("RESPONSE DATA:", response_data)
+    #
+    #     print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAa")
+        
+        message = response_data.get("message", {}).get("content", "Nessun contenuto ricevuto.")
+        print("MESSAGGIO:", message)
+    #     # print("MESSAGGIO:", response_data.get("message", {}).get("content", "Nessun contenuto ricevuto."))
+        return message
 
 
 # Alias per compatibilità
 LocalLLM = OllamaLLM
 
 
-# Factory function per creare LLM
-def create_llm(config: Dict[str, Any]) -> OllamaLLM:
-    """
-    Create an Ollama LLM instance from configuration
-
-    Args:
-        config: Configuration dictionary
-
-    Returns:
-        OllamaLLM instance
-    """
-    return OllamaLLM(
-        model_name=config.get("model", "llama2"),
-        base_url=config.get("base_url", "http://localhost:11434"),
-        temperature=config.get("temperature", 0.7),
-        max_tokens=config.get("max_tokens", 2048),
-        stop_sequences=config.get("stop_sequences", [])
-    )
-
-
-if __name__ == "__main__":
-    config = {
-        "model": "gradientai/Llama-3-8B-Instruct-Gradient-1048k",
-        "system_prompt": "Being an helpful AI, I will help you with your queries. Please ask me anything."
-    }
-    llm = create_llm(config)
-    # llm("How to create a new column in pandas dataframe?")
