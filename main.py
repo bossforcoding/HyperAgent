@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 def parse():
     args = ArgumentParser()
-    args.add_argument("--repo", type=str, required=True)
+    args.add_argument("--repo", type=str, required=True, defualt="examples")
     args.add_argument("--commit", type=str, default="")
     args.add_argument("--language", type=str, default="python")
     args.add_argument("--prompt", type=str,

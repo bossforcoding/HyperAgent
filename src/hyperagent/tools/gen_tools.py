@@ -3,6 +3,7 @@ import subprocess
 from typing import List, Optional, Callable
 
 from codetext.utils import parse_code
+from dotenv import load_dotenv
 from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
 
@@ -11,11 +12,12 @@ from hyperagent.code_search import get_parser
 from hyperagent.llm_multilspy import add_num_line
 from hyperagent.utils import find_matching_file_path
 
+load_dotenv()
+
 summarizer = LocalLLM(
-    {"model": "mistralai/Mixtral-8x7B-Instruct-v0.1", "system_prompt": "Describe this error message in plain text.",
+    {"model": "llama3.2:3b-instruct-q4_K_M", "system_prompt": "Describe this error message in plain text.",
      "max_tokens": 25000})
-# reviewer = AzureLLM({"model": "gpt-4-turbo", "system_prompt": "You're a software engineer working on a project, given a hint of code replacement of original file, you need to generate a block of code that can be replaced into the original. Do not generate additional line if it's unecessary to the hint. Pay attention to line number and indentation", "max_tokens": 10000})
-reviewer = LocalLLM({"model": "mistralai/Mixtral-8x7B-Instruct-v0.1",
+reviewer = LocalLLM({"model": "llama3.2:3b-instruct-q4_K_M",
                      "system_prompt": "You're a software engineer working on a project, given a hint of code replacement of original file, you need to generate a block of code that can be replaced into the original. Do not generate additional line if it's unecessary to the hint. Pay attention to line number and indentation",
                      "max_tokens": 10000})
 
@@ -89,8 +91,8 @@ class EditorTool(BaseTool):
 
         initial_patch_lines_region = lines[max(0, start_index - 10):start_index] + [patch + "\n"] + lines[
                                                                                                     end_index: min((
-                                                                                                                               end_index + 10),
-                                                                                                                   len(lines))]
+                                                                                                            end_index + 10),
+                                                                                                        len(lines))]
         initial_patch_block = "\n".join(initial_patch_lines_region)
         initial_patch_block = add_num_line(initial_patch_block, max(1, start_index - 10) + 1)
 

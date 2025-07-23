@@ -27,8 +27,8 @@ class OllamaLLM:
 
     def __init__(
             self,
-            model_name: str = "llama2",
-            base_url: str = "http://localhost:11434",
+            model_name: str = "llama3.2:3b-instruct-q4_K_M",
+            base_url: str = "http://sps-lab04.supsi.ch:7004",
             temperature: float = 0.7,
             max_tokens: int = 2048,
             stop_sequences: Optional[List[str]] = None,
@@ -69,7 +69,7 @@ class OllamaLLM:
                     f"Model '{self.model_name}' not found. Available models: {available_models}"
                 )
                 logger.info(f"Pulling model '{self.model_name}'...")
-                self._pull_model()
+                # self._pull_model()
         except Exception as e:
             logger.error(f"Error verifying model: {e}")
 
@@ -228,8 +228,8 @@ def create_llm(config: Dict[str, Any]) -> OllamaLLM:
         OllamaLLM instance
     """
     return OllamaLLM(
-        model_name=config.get("model", "llama2"),
-        base_url=config.get("base_url", "http://localhost:11434"),
+        model_name=config.get("model", "model_name"),
+        base_url=config.get("base_url", "http://sps-lab04.supsi.ch:11434"),
         temperature=config.get("temperature", 0.7),
         max_tokens=config.get("max_tokens", 2048),
         stop_sequences=config.get("stop_sequences", [])
@@ -238,7 +238,7 @@ def create_llm(config: Dict[str, Any]) -> OllamaLLM:
 
 if __name__ == "__main__":
     config = {
-        "model": "gradientai/Llama-3-8B-Instruct-Gradient-1048k",
+        "model": "llama3.2:latest",
         "system_prompt": "Being an helpful AI, I will help you with your queries. Please ask me anything."
     }
     llm = create_llm(config)
