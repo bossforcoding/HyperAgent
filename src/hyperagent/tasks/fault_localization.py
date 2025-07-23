@@ -5,6 +5,11 @@ from subprocess import PIPE, run
 from hyperagent.tasks.utils.bl import name_utils, sequence_utils
 from hyperagent.agents.llms import LocalLLM
 from hyperagent.tasks.base import BaseTask, Result
+from hyperagent import constants
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 BUG_INFO_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
                             "data/defects4j/")
@@ -24,7 +29,7 @@ class FaultLocalization(BaseTask):
         self._max_repetition_in_stack = 5
         self.defects4j_path = kwargs.get("defects4j_path")
         self.java_home = kwargs.get("java_home", "/usr")
-        self.llm = LocalLLM({"model": "mistralai/Mixtral-8x7B-Instruct-v0.1", "system_prompt": "Given following answer and true buggy methods, output True or False whether the predicted method is matched with buggy methods or not.", "max_tokens": 25000})
+        self.llm = LocalLLM({"model": constants.FAULT_MODEL, "system_prompt": "Given following answer and true buggy methods, output True or False whether the predicted method is matched with buggy methods or not.", "max_tokens": 25000})
         
     def failing_test_signatures(self, _fail_info):
         return list(_fail_info.keys())

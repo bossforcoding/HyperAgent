@@ -1,5 +1,7 @@
 import json
 import logging
+import os
+from hyperagent import constants
 from typing import List, Union, Dict, Any, Optional
 
 import requests
@@ -28,13 +30,13 @@ class OllamaLLM:
     def __init__(
             self,
             model_name: str = "llama2",
-            base_url: str = "http://localhost:11434",
+            base_url: str = constants.OLLAMA_URL,
             temperature: float = 0.7,
             max_tokens: int = 2048,
             stop_sequences: Optional[List[str]] = None,
             **kwargs
     ):
-        self.model_name = model_name
+        self.model_name = model_name["model"]
         self.base_url = base_url.rstrip('/')
         self.temperature = temperature
         self.max_tokens = max_tokens
