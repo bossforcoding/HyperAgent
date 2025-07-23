@@ -43,14 +43,14 @@ class OllamaLLM(LLM):
         # self.temperature = temperature
         self.max_tokens = self.config["max_tokens"]
 
-        # Verifica connessione Ollama
+        # Check Ollama connection
         self._verify_connection()
 
-        # Verifica che il modello sia disponibile
+        # Check if the model is available
         self._verify_model()
 
     def _verify_connection(self):
-        """Verifica che Ollama sia raggiungibile"""
+        """Checks that Ollama is reachable"""
         try:
             response = requests.get(f"{self.base_url}/api/tags", timeout=5)
             response.raise_for_status()
@@ -61,7 +61,7 @@ class OllamaLLM(LLM):
             raise RuntimeError(error_msg) from e
 
     def _verify_model(self):
-        """Verifica che il modello richiesto sia disponibile"""
+        """Checks that the requested model is available"""
         try:
             response = requests.get(f"{self.base_url}/api/tags")
             response.raise_for_status()
@@ -77,7 +77,7 @@ class OllamaLLM(LLM):
             logger.error(f"Error verifying model: {e}")
 
     def _pull_model(self):
-        """Scarica un modello se non disponibile"""
+        """Downloads a model if not available"""
         try:
             response = requests.post(
                 f"{self.base_url}/api/pull",
@@ -97,6 +97,73 @@ class OllamaLLM(LLM):
             logger.error(f"Failed to pull model '{self.model_name}': {e}")
             raise
 
+    def convert_ollama_to_openai(self, output):
+        openai_output = {
+            "choices": [
+                {
+                    "content_filter_results": {
+                        "hate": {
+                            "filtered": False,
+                            "severity": "safe"
+                        },
+                        "self_harm": {
+                            "filtered": False,
+                            "severity": "safe"
+                        },
+                        "sexual": {
+                            "filtered": False,
+                            "severity": "safe"
+                        },
+                        "violence": {
+                            "filtered": False,
+                            "severity": "safe"
+                        }
+                    },
+                    "finish_reason": "stop",
+                    "index": 0,
+                    "message": {
+                        "content": str(output['message']['content']),
+                        "role": "user"
+                    }
+                }
+            ],
+            "created": 1716105669,
+            "id": "chatcmpl-9QVldRhe4q0z7qIz3uZ6oFq7E5lvw",
+            "model": output['model'],
+            "object": "chat.completion",
+            "prompt_filter_results": [
+                {
+                    "prompt_index": 0,
+                    "content_filter_results": {
+                        "hate": {
+                            "filtered": False,
+                            "severity": "safe"
+                        },
+                        "self_harm": {
+                            "filtered": False,
+                            "severity": "safe"
+                        },
+                        "sexual": {
+                            "filtered": False,
+                            "severity": "safe"
+                        },
+                        "violence": {
+                            "filtered": False,
+                            "severity": "safe"
+                        }
+                    }
+                }
+            ],
+            "system_fingerprint": None,
+            "usage": {
+                "completion_tokens": -1,
+                "prompt_tokens": -1,
+                "total_tokens": -1
+            }
+        }
+
+        return openai_output
+
     def __call__(self, prompt: str):
 
         payload = {
@@ -105,27 +172,22 @@ class OllamaLLM(LLM):
                 {"role": "system", "content": self.system_prompt},
                 {"role": "user", "content": prompt},
             ],
-            "stream": False  # Impostato a False per ricevere la risposta completa in una volta
+            "stream": False  # Set to False to receive the complete response at once
         }
 
         response = requests.post(
             # f"{self.base_url}/api/generate",
             f"{self.base_url}/api/chat",
             json=payload,
-        )
-    #
-        response_data = response.json()
-        print("RESPONSE DATA:", response_data)
-    #
-    #     print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAa")
-        
-        message = response_data.get("message", {}).get("content", "Nessun contenuto ricevuto.")
-        print("MESSAGGIO:", message)
-    #     # print("MESSAGGIO:", response_data.get("message", {}).get("content", "Nessun contenuto ricevuto."))
-        return message
+        ).json()
+
+        message_content = response.get("message", {}).get("content", "No content received.")
+        message_content_opeai_style = convert_ollama_to_openai = self.convert_ollama_to_openai(response)
+        print("Ollama Message Content:", message_content)
+        print("Ollama Message Content OpenAI Style:", message_content_opeai_style)
+        return message_content
+        # return message_content_opeai_style
 
 
-# Alias per compatibilità
+# Alias for compatibility
 LocalLLM = OllamaLLM
-
-
