@@ -1,11 +1,10 @@
-import json
-import logging
 import os
-from hyperagent import constants
-from typing import List, Union, Dict, Any, Optional
-
-import requests
+from groq import Groq
+from vllm import LLM as vLLM
+from abc import ABC, abstractmethod
+from openai import OpenAI, AzureOpenAI
 from transformers import AutoTokenizer, AutoConfig
+from hyperagent.constants import OLLAMA_URL
 
 
 def truncate_tokens_hf(string: str, encoding_name: str) -> str:
@@ -21,173 +20,189 @@ def truncate_tokens_hf(string: str, encoding_name: str) -> str:
     return string
 
 
-logger = logging.getLogger(__name__)
-
-
-class LLM:
+class BaseLLM(ABC):
     def __init__(self, config):
         self.system_prompt = config["system_prompt"]
         self.config = config
 
-    def __call__(self, *args: Any, **kwds: Any) -> Any:
+    @abstractmethod
+    def generate_response(self, prompt: str) -> str:
+        """Generate response from the LLM"""
         pass
 
+    def __call__(self, prompt: str) -> str:
+        """Make the class callable"""
+        return self.generate_response(prompt)
 
-class OllamaLLM(LLM):
-    """Ollama LLM wrapper for local model inference"""
 
-    def __init__(self, config, base_url: str = constants.OLLAMA_URL):
+class GroqLLM(BaseLLM):
+    def __init__(self, config):
         super().__init__(config)
-        self.model_name = self.config["model"]
-        self.base_url = base_url.rstrip('/')
-        # self.temperature = temperature
-        self.max_tokens = self.config["max_tokens"]
+        self.client = Groq(
+            api_key=os.environ["GROQ_API_KEY"],
+        )
 
-        # Check Ollama connection
-        self._verify_connection()
-
-        # Check if the model is available
-        self._verify_model()
-
-    def _verify_connection(self):
-        """Checks that Ollama is reachable"""
-        try:
-            response = requests.get(f"{self.base_url}/api/tags", timeout=5)
-            response.raise_for_status()
-            logger.info(f"Successfully connected to Ollama at {self.base_url}")
-        except requests.exceptions.RequestException as e:
-            error_msg = f"Cannot connect to Ollama at {self.base_url}. Make sure Ollama is running."
-            logger.error(error_msg)
-            raise RuntimeError(error_msg) from e
-
-    def _verify_model(self):
-        """Checks that the requested model is available"""
-        try:
-            response = requests.get(f"{self.base_url}/api/tags")
-            response.raise_for_status()
-            available_models = [model["name"] for model in response.json().get("models", [])]
-
-            if self.model_name not in available_models:
-                logger.warning(
-                    f"Model '{self.model_name}' not found. Available models: {available_models}"
-                )
-                logger.info(f"Pulling model '{self.model_name}'...")
-                self._pull_model()
-        except Exception as e:
-            logger.error(f"Error verifying model: {e}")
-
-    def _pull_model(self):
-        """Downloads a model if not available"""
-        try:
-            response = requests.post(
-                f"{self.base_url}/api/pull",
-                json={"name": self.model_name},
-                stream=True
-            )
-            response.raise_for_status()
-
-            for line in response.iter_lines():
-                if line:
-                    data = json.loads(line)
-                    if "status" in data:
-                        logger.info(f"Pulling {self.model_name}: {data['status']}")
-
-            logger.info(f"Successfully pulled model '{self.model_name}'")
-        except Exception as e:
-            logger.error(f"Failed to pull model '{self.model_name}': {e}")
-            raise
-
-    def convert_ollama_to_openai(self, output):
-        openai_output = {
-            "choices": [
-                {
-                    "content_filter_results": {
-                        "hate": {
-                            "filtered": False,
-                            "severity": "safe"
-                        },
-                        "self_harm": {
-                            "filtered": False,
-                            "severity": "safe"
-                        },
-                        "sexual": {
-                            "filtered": False,
-                            "severity": "safe"
-                        },
-                        "violence": {
-                            "filtered": False,
-                            "severity": "safe"
-                        }
-                    },
-                    "finish_reason": "stop",
-                    "index": 0,
-                    "message": {
-                        "content": str(output['message']['content']),
-                        "role": "user"
-                    }
-                }
-            ],
-            "created": 1716105669,
-            "id": "chatcmpl-9QVldRhe4q0z7qIz3uZ6oFq7E5lvw",
-            "model": output['model'],
-            "object": "chat.completion",
-            "prompt_filter_results": [
-                {
-                    "prompt_index": 0,
-                    "content_filter_results": {
-                        "hate": {
-                            "filtered": False,
-                            "severity": "safe"
-                        },
-                        "self_harm": {
-                            "filtered": False,
-                            "severity": "safe"
-                        },
-                        "sexual": {
-                            "filtered": False,
-                            "severity": "safe"
-                        },
-                        "violence": {
-                            "filtered": False,
-                            "severity": "safe"
-                        }
-                    }
-                }
-            ],
-            "system_fingerprint": None,
-            "usage": {
-                "completion_tokens": -1,
-                "prompt_tokens": -1,
-                "total_tokens": -1
-            }
-        }
-
-        return openai_output
-
-    def __call__(self, prompt: str):
-
-        payload = {
-            "model": self.model_name,
-            "messages": [
+    def generate_response(self, prompt: str):
+        response = self.client.chat.completions.create(
+            messages=[
                 {"role": "system", "content": self.system_prompt},
                 {"role": "user", "content": prompt},
             ],
-            "stream": False  # Set to False to receive the complete response at once
-        }
-
-        response = requests.post(
-            # f"{self.base_url}/api/generate",
-            f"{self.base_url}/api/chat",
-            json=payload,
-        ).json()
-
-        message_content = response.get("message", {}).get("content", "No content received.")
-        message_content_opeai_style = convert_ollama_to_openai = self.convert_ollama_to_openai(response)
-        print("Ollama Message Content:", message_content)
-        print("Ollama Message Content OpenAI Style:", message_content_opeai_style)
-        return message_content
-        # return message_content_opeai_style
+            model=self.config["model"],
+        )
+        return response.choices[0].message.content
 
 
-# Alias for compatibility
-LocalLLM = OllamaLLM
+class LocalLLM(BaseLLM):
+    def __init__(self, config):
+        super().__init__(config)
+        openai_api_key = os.environ["TOGETHER_API_KEY"]
+        openai_api_base = "https://api.together.xyz"
+        # openai_api_base = "http://localhost:8004/v1"
+        # openai_api_key="token-abc123"
+
+        self.client = OpenAI(
+            api_key=openai_api_key,
+            base_url=openai_api_base,
+        )
+
+    def generate_response(self, prompt: str):
+        prompt = truncate_tokens_hf(prompt, encoding_name=self.config["model"])
+        response = self.client.chat.completions.create(
+            temperature=0,
+            model=self.config["model"],
+            messages=[
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=None
+        )
+        return response.choices[0].message.content
+
+
+class OpenAILLM(BaseLLM):
+    def __init__(self, config):
+        super().__init__(config)
+        if "openai_api_key" in config:
+            openai_api_key = config["openai_api_key"]
+        elif "OPENAI_API_KEY" in os.environ:
+            openai_api_key = os.environ["OPENAI_API_KEY"]
+        else:
+            assert False, "OpenAI API key not found"
+        self.client = OpenAI(
+            api_key=openai_api_key,
+        )
+
+    def generate_response(self, prompt: str):
+        # The line `prompt = truncate_tokens(prompt, encoding_name=self.config["model"],
+        # max_length=self.config["max_tokens"])` is calling a function named `truncate_tokens` with
+        # three arguments: `prompt`, `encoding_name`, and `max_length`. This function is likely used
+        # to truncate the input `prompt` to a specified maximum length based on the model being used
+        # and the maximum tokens allowed.
+        # prompt = truncate_tokens(prompt, encoding_name=self.config["model"], max_length=self.config["max_tokens"])
+        response = self.client.chat.completions.create(
+            temperature=0,
+            model=self.config["model"],
+            messages=[
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": prompt},
+            ]
+        )
+        return response.choices[0].message.content
+
+
+class AzureLLM(BaseLLM):
+    def __init__(self, config):
+        super().__init__(config)
+        if "openai_api_key" in config:
+            openai_api_key = config["openai_api_key"]
+        elif "OPENAI_API_KEY" in os.environ:
+            openai_api_key = os.environ["OPENAI_API_KEY"]
+        else:
+            assert False, "OpenAI API key not found"
+
+        self.client = AzureOpenAI(
+            azure_endpoint=os.environ["AZURE_ENDPOINT_GPT35"] if "gpt35" in self.config["model"] else os.environ[
+                "AZURE_ENDPOINT_GPT4"],
+            api_key=openai_api_key,
+            api_version=os.environ["API_VERSION"],
+            azure_deployment="ai4code-research-gpt4o"
+        )
+
+    def generate_response(self, prompt: str):
+        # prompt = truncate_tokens(prompt, encoding_name=self.config["model"], max_length=self.config["max_tokens"])
+        response = self.client.chat.completions.create(
+            temperature=0,
+            model=self.config["model"],
+            messages=[
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": prompt},
+            ]
+        )
+        return response.choices[0].message.content
+
+
+class VLLM(BaseLLM):
+    def __init__(self, config):
+        super().__init__(config)
+        self.client = vLLM(
+            model=config["model"],
+            tensor_parallel_size=2,
+        )
+        self.system_prompt = config["system_prompt"]
+
+    def generate_response(self, prompt: str):
+        composed_prompt = f"{self.system_prompt} {prompt}"
+        response = self.client.generate(composed_prompt)
+        return response[0].outputs[0].text
+
+
+class OllamaLLM(BaseLLM):
+    """Ollama LLM wrapper for local model inference"""
+
+    def __init__(self, config, base_url=OLLAMA_URL):
+        super().__init__(config)
+
+        self.client = OpenAI(base_url=f"{base_url}/v1", api_key="ollama")
+
+    def generate_response(self, prompt: str):
+        response = self.client.chat.completions.create(
+            temperature=0,
+            model=self.config["model"],
+            messages=[
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": prompt},
+            ]
+        )
+        return response.choices[0].message.content
+
+
+def create_llm(config, llm_type="OLLAMA", **kwargs) -> BaseLLM:
+    """
+    Factory function to create LLM instances
+
+    Args:
+        config: LLM configuration
+        llm_type: Type of LLM ('OLLAMA', etc.)
+        **kwargs: Additional arguments for specific LLM types
+
+    Returns:
+        LLM instance
+
+    Raises:
+        ValueError: If llm_type is not supported
+    """
+    if llm_type.lower() == 'openai':
+        return OpenAILLM(config)
+    elif llm_type.lower() == 'azure':
+        return AzureLLM(config)
+    elif llm_type.lower() == 'groq':
+        return GroqLLM(config)
+    elif llm_type.lower() == 'vllm':
+        return VLLM(config)
+    elif llm_type.lower() == 'ollama':
+        return OllamaLLM(config, OLLAMA_URL)
+    elif llm_type.lower() == 'local':
+        return LocalLLM(config)
+    else:
+        raise ValueError(f"Unsupported LLM type: {llm_type}")
