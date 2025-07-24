@@ -3,7 +3,6 @@ import re
 import json
 from subprocess import PIPE, run
 from hyperagent.tasks.utils.bl import name_utils, sequence_utils
-from hyperagent.agents.llms import LocalLLM
 from hyperagent.tasks.base import BaseTask, Result
 from hyperagent.utils import extract_patch
 from hyperagent.tasks.fault_localization import FaultLocalization

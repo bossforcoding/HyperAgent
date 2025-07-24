@@ -1,13 +1,13 @@
 from autogen import UserProxyAgent, AssistantAgent, GroupChat, GroupChatManager, Agent, ConversableAgent
 from autogen.agentchat.contrib.society_of_mind_agent import SocietyOfMindAgent 
-from hyperagent.agents.llms import LocalLLM
+from hyperagent.agents.llms import create_llm
 from hyperagent.utils import extract_patch
 from hyperagent.prompts.utils import react_prompt_message, react_exec_prompt_message
 from hyperagent import constants
 
 def load_summarizer():
     config = {"model": constants.SUMMARIZER_MODEL, "system_prompt": "You're a helpful assistant", "max_tokens": 128000}
-    summarizer = LocalLLM(config)
+    summarizer = create_llm(config, constants.MODEL_TYPE)
     return summarizer
 
 def load_agent_navigator(

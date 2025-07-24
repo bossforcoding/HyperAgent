@@ -6,29 +6,29 @@ from codetext.utils import parse_code
 from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
 
-from hyperagent.agents.llms import LocalLLM
+from hyperagent.agents.llms import create_llm
 from hyperagent.code_search import get_parser
 from hyperagent.llm_multilspy import add_num_line
 from hyperagent.utils import find_matching_file_path
 from hyperagent import constants
 
-# summarizer = LocalLLM(
+# summarizer = create_llm(
 #     {"model": "mistralai/Mixtral-8x7B-Instruct-v0.1", "system_prompt": "Describe this error message in plain text.",
-#      "max_tokens": 25000})
+#      "max_tokens": 25000}, constants.MODEL_TYPE)
 
-summarizer = LocalLLM(
+summarizer = create_llm(
     {"model": constants.SUMMARIZER_MODEL, "system_prompt": "Describe this error message in plain text.",
-     "max_tokens": 25000})
+     "max_tokens": 25000}, constants.MODEL_TYPE)
 
-# reviewer = AzureLLM({"model": "gpt-4-turbo", "system_prompt": "You're a software engineer working on a project, given a hint of code replacement of original file, you need to generate a block of code that can be replaced into the original. Do not generate additional line if it's unecessary to the hint. Pay attention to line number and indentation", "max_tokens": 10000})
+# reviewer = create_llm({"model": "gpt-4-turbo", "system_prompt": "You're a software engineer working on a project, given a hint of code replacement of original file, you need to generate a block of code that can be replaced into the original. Do not generate additional line if it's unecessary to the hint. Pay attention to line number and indentation", "max_tokens": 10000}, "AZURE")
 
-# reviewer = LocalLLM({"model": "mistralai/Mixtral-8x7B-Instruct-v0.1",
+# reviewer = create_llm({"model": "mistralai/Mixtral-8x7B-Instruct-v0.1",
 #                      "system_prompt": "You're a software engineer working on a project, given a hint of code replacement of original file, you need to generate a block of code that can be replaced into the original. Do not generate additional line if it's unecessary to the hint. Pay attention to line number and indentation",
-#                      "max_tokens": 10000})
+#                      "max_tokens": 10000}, constants.MODEL_TYPE)
 
-reviewer = LocalLLM({"model": constants.REVIEWER_MODEL,
+reviewer = create_llm({"model": constants.REVIEWER_MODEL,
                      "system_prompt": "You're a software engineer working on a project, given a hint of code replacement of original file, you need to generate a block of code that can be replaced into the original. Do not generate additional line if it's unecessary to the hint. Pay attention to line number and indentation",
-                     "max_tokens": 10000})
+                     "max_tokens": 10000}, constants.MODEL_TYPE)
 
 
 class EditorArgs(BaseModel):
