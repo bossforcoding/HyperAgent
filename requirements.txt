@@ -139,7 +139,7 @@ nox==2024.4.15
 numpy==1.26.4
 oauthlib==3.2.2
 omegaconf==2.4.0.dev3
-openai==1.43.0
+openai==1.97.1
 orjson==3.10.6
 outlines==0.0.46
 packaging==24.1
@@ -165,7 +165,7 @@ pycodestyle==2.10.0
 pycountry==24.6.1
 pycparser==2.22
 pycryptodomex==3.20.0
-pydantic==2.7.4
+pydantic==2.11.7
 pydantic-settings==2.5.2
 pydantic_core==2.18.4
 pydeck==0.9.1
@@ -247,4 +247,10 @@ zipp==3.19.2
 zmq==0.0.0
 zope.event==5.0
 zope.interface==6.4.post2
-pyautogen==0.3.0
+pyautogen==0.4
+bs4==0.0.2
+beautifulsoup4==4.13.4
+python-dotenv==1.1.1
+tenacity==8.5.0
+torch==2.4.0
+prompt-toolkit==3.0.51
