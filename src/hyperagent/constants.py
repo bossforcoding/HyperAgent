@@ -18,6 +18,7 @@ DEFAULT_LANGUAGE = "python"
 DEFAULT_VERBOSE_LEVEL = 1
 DEFAULT_TRAJECTORIES_PATH = "HyperAgent/examples/"
 DO_NOT_SUMMARIZED_KEYS = ["python", "code_snippet"]
+MODEL_TYPE = os.environ.get("MODEL_TYPE", "OLLAMA")
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 SUMMARIZER_MODEL = os.environ.get("SUMMARIZER_MODEL", "llama3.2:latest ")
 REVIEWER_MODEL = os.environ.get("REVIEWER_MODEL", "llama3.2:latest")
