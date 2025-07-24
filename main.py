@@ -15,6 +15,7 @@ def parse():
     args.add_argument("--repo", type=str, required=True)
     args.add_argument("--commit", type=str, default="")
     args.add_argument("--language", type=str, default="python")
+    args.add_argument("--clone_dir", type=str, default="data/repos")
     args.add_argument("--prompt", type=str,
                       default="How to add new memory efficient fine-tuning technique to the project?")
     return args.parse_args()
@@ -23,7 +24,7 @@ def parse():
 if __name__ == "__main__":
     logger.info("Start!")
     args = parse()
-    pilot = HyperAgent(args.repo, commit=args.commit, language=args.language, clone_dir="data/repos")
+    pilot = HyperAgent(args.repo, commit=args.commit, language=args.language, clone_dir=args.clone_dir)
     logger.info("Setup done!")
 
     print(pilot.query_codebase(args.prompt))
