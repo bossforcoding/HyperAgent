@@ -1,7 +1,7 @@
 import logging
 from argparse import ArgumentParser
 
-from src.hyperagent import HyperAgent
+from hyperagent import HyperAgent
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
