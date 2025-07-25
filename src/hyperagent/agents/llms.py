@@ -4,7 +4,7 @@ from vllm import LLM as vLLM
 from abc import ABC, abstractmethod
 from openai import OpenAI, AzureOpenAI
 from transformers import AutoTokenizer, AutoConfig
-from hyperagent.constants import OLLAMA_URL
+from hyperagent.constants import OLLAMA_HOST
 
 
 def truncate_tokens_hf(string: str, encoding_name: str) -> str:
@@ -160,7 +160,7 @@ class VLLM(BaseLLM):
 class OllamaLLM(BaseLLM):
     """Ollama LLM wrapper for local model inference"""
 
-    def __init__(self, config, base_url=OLLAMA_URL):
+    def __init__(self, config, base_url=OLLAMA_HOST):
         super().__init__(config)
 
         self.client = OpenAI(base_url=f"{base_url}/v1", api_key="ollama")
@@ -201,7 +201,7 @@ def create_llm(config, llm_type="OLLAMA", **kwargs) -> BaseLLM:
     elif llm_type.lower() == 'vllm':
         return VLLM(config)
     elif llm_type.lower() == 'ollama':
-        return OllamaLLM(config, OLLAMA_URL)
+        return OllamaLLM(config, OLLAMA_HOST)
     elif llm_type.lower() == 'local':
         return LocalLLM(config)
     else:
