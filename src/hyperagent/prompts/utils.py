@@ -88,7 +88,7 @@ from astropy.timeseries import TimeSeries
 import numpy as np                                                                                                                                                             
                                                                                                                                                                             
 time = Time(np.arange(100000, 100003), format='jd')                                                                                                                            
-ts = TimeSeries(time=time, data={"flux": [99.9, 99.8, 99.7]})                                                                                                                  
+ts = TimeSeries(time=time, data={{"flux": [99.9, 99.8, 99.7]}})                                                                                                                  
 ts._required_columns = ["time", "flux"]                                                                                                                                        
 try:                                                                                                                                                                           
     ts.remove_column("flux")                                                                                                                                                   
@@ -102,7 +102,7 @@ from astropy.timeseries import TimeSeries
 import numpy as np
 
 time = Time(np.arange(100000, 100003), format='jd')
-ts = TimeSeries(time=time, data={'flux': [99.9, 99.8, 99.7]})
+ts = TimeSeries(time=time, data={{'flux': [99.9, 99.8, 99.7]}})
 ts._required_columns = ['time', 'flux']
 try:
     ts.remove_column('flux')
