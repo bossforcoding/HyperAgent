@@ -113,7 +113,7 @@ async def proxy_native_chat(request: Request):
     headers = dict(request.headers)
 
     # Remove problematic headers that might cause conflicts
-    headers_to_remove = ["host", "user-agent", "connection"]
+    headers_to_remove = ["host", "content-length", "transfer-encoding", "connection", "content-encoding"]
     for header in headers_to_remove:
         headers.pop(header, None)
 
