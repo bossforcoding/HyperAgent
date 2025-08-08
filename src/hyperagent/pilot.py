@@ -1,8 +1,11 @@
 import os
 import warnings
 from typing import Optional
+
 from autogen import UserProxyAgent
-from hyperagent.utils import clone_repo, check_local_or_remote, setup_logger
+
+from hyperagent.log_manager import get_logger
+from hyperagent.utils import clone_repo, check_local_or_remote
 from hyperagent.agents.plan_seeking import load_agent_navigator, load_agent_editor, load_agent_executor, \
     load_summarizer, load_agent_planner, load_manager
 from hyperagent.prompts.navigator import system_nav
@@ -15,8 +18,6 @@ from hyperagent.constants import DEFAULT_VERBOSE_LEVEL, DEFAULT_LLM_CONFIGS, DEF
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
-
-logger = setup_logger()
 
 
 def Setup(
@@ -32,6 +33,8 @@ def Setup(
 ):
     if not os.path.exists(DEFAULT_PATCHES_DIR):
         os.makedirs(DEFAULT_PATCHES_DIR)
+
+    logger = get_logger()
 
     # initialize the github repository
     gh_token = os.environ.get("GITHUB_TOKEN", None)

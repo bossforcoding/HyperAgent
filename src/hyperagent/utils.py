@@ -1,4 +1,10 @@
+import threading
+from datetime import datetime
+import sys
 from pathlib import Path
+
+import autogen
+import autogen_core
 from git import Repo
 import subprocess
 import os
@@ -16,6 +22,7 @@ import logging
 import random
 import string
 
+
 def generate_random_string(length, use_uppercase=True, use_lowercase=True, use_digits=True, use_punctuation=False):
     characters = ''
     if use_uppercase:
@@ -26,21 +33,24 @@ def generate_random_string(length, use_uppercase=True, use_lowercase=True, use_d
         characters += string.digits
     if use_punctuation:
         characters += string.punctuation
-    
+
     if not characters:
         raise ValueError("At least one character set must be selected")
-    
+
     return ''.join(random.choice(characters) for i in range(length))
+
 
 def find_most_matched_string(word_list, target):
     # Get close matches; n=1 ensures only the top match is returned
     matches = difflib.get_close_matches(target, word_list, n=1)
     return matches[0] if matches else None
 
+
 def find_free_port():
     with socketserver.TCPServer(("localhost", 0), None) as s:
         free_port = s.server_address[1]
     return free_port
+
 
 def check_local_or_remote(path: str):
     # Check if link is a valid folder path
@@ -53,10 +63,12 @@ def check_local_or_remote(path: str):
             return (False, result.path[1:])
     except:
         raise ValueError("Please provide a valid folder path or GitHub URL.")
-    
+
+
 def get_env_path():
     python_path = subprocess.check_output("which python", shell=True).strip().decode("utf-8")
     return python_path
+
 
 def clone_repo(repo, commit, root_dir, token, logger):
     """
@@ -72,20 +84,21 @@ def clone_repo(repo, commit, root_dir, token, logger):
         Path: The path to the cloned repository directory.
     """
     repo_dir = Path(root_dir, f"repo__{repo.replace('/', '__')}__commit__{commit}")
-    
+
     if not repo_dir.exists():
         repo_url = f"https://{token}@github.com/{repo}.git"
         # logger.info(f"Cloning {repo} {os.getpid()}")
         Repo.clone_from(repo_url, repo_dir)
         cmd = f"cd {repo_dir} && git reset --hard {commit} && git clean -fdxq"
         subprocess.run(
-                cmd,
-                shell=True,
-                check=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+            cmd,
+            shell=True,
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
     return root_dir + "/" + repo_dir.name
+
 
 def identify_extension(language):
     """
@@ -105,6 +118,7 @@ def identify_extension(language):
         return ".cs"
     elif language == "rust":
         return ".rs"
+
 
 def matching_kind_symbol(symbol):
     """
@@ -167,8 +181,9 @@ def matching_kind_symbol(symbol):
         return "TypeParameter"
     else:
         return "Unknown"
-    
-def word_to_position(source: str, word: str, line = None, offset: int = 0):
+
+
+def word_to_position(source: str, word: str, line=None, offset: int = 0):
     """
     Find the position of a word in a source.
 
@@ -189,16 +204,19 @@ def word_to_position(source: str, word: str, line = None, offset: int = 0):
     try:
         for i, _line in enumerate(lines):
             if word in _line:
-                return {"line": (line + offset) if line else (i + offset), "column": lines[line].index(word)+1 if line else (_line.index(word) + 1)} ## +1 because the position is 0-based
+                return {"line": (line + offset) if line else (i + offset),
+                        "column": lines[line].index(word) + 1 if line else (
+                                _line.index(word) + 1)}  ## +1 because the position is 0-based
     except ValueError:
         for i, _line in enumerate(lines):
             if word in _line:
-                return {"line": i, "column": lines[i].index(word)+1}
+                return {"line": i, "column": lines[i].index(word) + 1}
     except IndexError:
         for i, _line in enumerate(lines):
             if word in _line:
-                return {"line": i, "column": _line.index(word)+1}
+                return {"line": i, "column": _line.index(word) + 1}
     return None
+
 
 def add_num_line(source: str, start_line: int):
     """
@@ -219,6 +237,7 @@ def add_num_line(source: str, start_line: int):
         _line = str(idx + start_line) + " " + _line
         results.append(_line)
     return "\n".join(results)
+
 
 def matching_symbols(symbols, object):
     """
@@ -242,6 +261,7 @@ def matching_symbols(symbols, object):
             return symbol
     return None
 
+
 def get_text(doc, range):
     """
     Retrieves the text within the specified range in the given document.
@@ -254,6 +274,7 @@ def get_text(doc, range):
         str: The extracted text within the specified range.
     """
     return doc[offset_at_position(doc, range["start"]):offset_at_position(doc, range["end"])]
+
 
 def offset_at_position(doc, position):
     """
@@ -268,11 +289,13 @@ def offset_at_position(doc, position):
     """
     return position["character"] + len("".join(doc.splitlines(True)[: position["line"]]))
 
+
 def save_infos_to_folder(infos_dict, name, folder):
     if not os.path.exists(folder):
         os.makedirs(folder)
     with open(folder + "/" + name + ".json", "w") as f:
         json.dump(infos_dict, f, indent=4)
+
 
 def get_file_paths_recursive(directory):
     file_paths = []
@@ -283,6 +306,7 @@ def get_file_paths_recursive(directory):
             file_paths.append(file_path)
     return file_paths
 
+
 def truncate_tokens(string: str, encoding_name: str, max_length: int = 8192) -> str:
     """Truncates a text string based on max number of tokens."""
     encoding = tiktoken.encoding_for_model(encoding_name)
@@ -290,9 +314,10 @@ def truncate_tokens(string: str, encoding_name: str, max_length: int = 8192) -> 
     num_tokens = len(encoded_string)
 
     if num_tokens > max_length:
-        string = encoding.decode(encoded_string[:max_length-300])
+        string = encoding.decode(encoded_string[:max_length - 300])
 
     return string
+
 
 def truncate_tokens_hf(string: str, encoding_name: str) -> str:
     """Truncates a text string based on max number of tokens."""
@@ -302,9 +327,10 @@ def truncate_tokens_hf(string: str, encoding_name: str) -> str:
     num_tokens = len(encoded_string[0])
 
     if num_tokens > max_tokens:
-        string = tokenizer.decode(encoded_string[0][:max_tokens-400])
+        string = tokenizer.decode(encoded_string[0][:max_tokens - 400])
 
     return string
+
 
 def find_non_utf8_files(path):
     """
@@ -329,6 +355,7 @@ def find_non_utf8_files(path):
                 non_utf8_files.append(relative_path)
     return non_utf8_files
 
+
 def find_abs_path(folder, file_name):
     # Walk through the directory and its subdirectories
     for root, dirs, files in os.walk(folder):
@@ -341,8 +368,10 @@ def find_abs_path(folder, file_name):
     # If file is not found, return None
     return None
 
+
 def run_ctags(file_path):
-    MAIN_KINDS = {"module": SymbolKind.Module, "namespace": SymbolKind.Namespace, "class": SymbolKind.Class, "method": SymbolKind.Method, "function": SymbolKind.Function, "member": SymbolKind.Method}
+    MAIN_KINDS = {"module": SymbolKind.Module, "namespace": SymbolKind.Namespace, "class": SymbolKind.Class,
+                  "method": SymbolKind.Method, "function": SymbolKind.Function, "member": SymbolKind.Method}
     filter_results = []
     final_results = []
     cmd = ["ctags", "--extras=*", "--fields={line}{end}{name}{kind}{scopeKind}", "--output-format=json", file_path]
@@ -360,13 +389,14 @@ def run_ctags(file_path):
                 symbol["range"] = {"start_line": symbol["line"], "end_line": symbol["end"]}
                 symbol["created_by_ctags"] = True
                 filter_results.append(symbol)
-                
+
     # a simple heuristic to get the longest name for each symbol since ctags does not provide the full name
     for symbol in filter_results:
         if "scopeKind" in symbol:
             for result in results:
                 if "line" in result and "scopeKind" in result and "name" in result:
-                    if result["line"] == symbol["line"] and result["scopeKind"] == symbol["scopeKind"] and len(result["name"]) > len(symbol["name"]):
+                    if result["line"] == symbol["line"] and result["scopeKind"] == symbol["scopeKind"] and len(
+                            result["name"]) > len(symbol["name"]):
                         symbol["name"] = result["name"]
     # filter out duplicate symbols, choose the longest end-start line
     filter_results = sorted(filter_results, key=lambda x: (x["line"], x["end"] - x["line"]), reverse=True)
@@ -375,21 +405,25 @@ def run_ctags(file_path):
             final_results.append(symbol)
     return final_results
 
+
 def get_symbol_with_keyword(file_path: str, parent_path: str, keyword: str):
-    out_symbols = get_symbol_per_file(file_path, [SymbolKind.Class, SymbolKind.Method, SymbolKind.Function], parent_path, keyword)
+    out_symbols = get_symbol_per_file(file_path, [SymbolKind.Class, SymbolKind.Method, SymbolKind.Function],
+                                      parent_path, keyword)
     for symbol in out_symbols:
         if keyword == symbol["name"]:
             return symbol["definition"]
     return F"No symbol {keyword} found in this file."
+
 
 def get_symbol_per_file(file_path: str, primary_symbols, parent_path, keyword):
     out_file_symbols = []
     file_symbols = run_ctags(file_path)
     primary_symbols = [int(symbol_kind) for symbol_kind in primary_symbols]
     file_symbols = [symbol for symbol in file_symbols if symbol["kind"] in primary_symbols]
-    
+
     for symbol in file_symbols:
-        symbol_definition = open(file_path, "r").readlines()[symbol["range"]["start_line"]-1:symbol["range"]["end_line"]]
+        symbol_definition = open(file_path, "r").readlines()[
+                            symbol["range"]["start_line"] - 1:symbol["range"]["end_line"]]
         symbol_definition = "".join(symbol_definition)
         output_item = {
             "name": symbol["name"],
@@ -399,13 +433,15 @@ def get_symbol_per_file(file_path: str, primary_symbols, parent_path, keyword):
         }
         if keyword is not None:
             # if keyword exists, we prefer exact match over partial match to reduce false positives and redudant observation, otherwise we keep all partial matches.
-            condition = (keyword == symbol["name"]) if keyword in [s["name"] for s in file_symbols] else (keyword in symbol["name"])
+            condition = (keyword == symbol["name"]) if keyword in [s["name"] for s in file_symbols] else (
+                    keyword in symbol["name"])
             if condition:
                 out_file_symbols.append(output_item)
         else:
             out_file_symbols.append(output_item)
-    
+
     return out_file_symbols
+
 
 def get_symbol_verbose(file_path: str, parent_path: str, keyword: str = None):
     primary_symbols = [SymbolKind.Class, SymbolKind.Method, SymbolKind.Function, SymbolKind.Interface]
@@ -416,10 +452,11 @@ def get_symbol_verbose(file_path: str, parent_path: str, keyword: str = None):
             out_file_symbols = get_symbol_per_file(file_path, primary_symbols, parent_path, keyword)
             out_str = ""
             out_str += f"Symbols in {file_path.replace(parent_path, '')}\n"
-            num_line_per_symbol = [symbol["range"]["end_line"] - symbol["range"]["start_line"] for symbol in out_file_symbols]
+            num_line_per_symbol = [symbol["range"]["end_line"] - symbol["range"]["start_line"] for symbol in
+                                   out_file_symbols]
             if len(out_file_symbols) == 0:
                 return "No symbol found in this file."
-            
+
             if len(out_file_symbols) >= 3 or max(num_line_per_symbol) > 35:
                 out_str += "Name StartLine EndLine\n"
                 for symbol in out_file_symbols:
@@ -428,46 +465,12 @@ def get_symbol_verbose(file_path: str, parent_path: str, keyword: str = None):
                 out_str += "Name StartLine EndLine Definition\n"
                 for symbol in out_file_symbols:
                     out_str += f"{symbol['name']} {symbol['range']['start_line']} {symbol['range']['end_line']} \n{symbol['definition']}\n"
-            
+
             return out_str
         except UnicodeDecodeError:
             print(f"Error in reading file {file_path}")
             return f"Error in reading file {file_path}"
-        
-def setup_logger():
-    class CustomFormatter(logging.Formatter):
 
-        grey = "\x1b[38;20m"
-        yellow = "\x1b[33;20m"
-        red = "\x1b[31;20m"
-        bold_red = "\x1b[31;1m"
-        reset = "\x1b[0m"
-        format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
-
-        FORMATS = {
-            logging.DEBUG: grey + format + reset,
-            logging.INFO: grey + format + reset,
-            logging.WARNING: yellow + format + reset,
-            logging.ERROR: red + format + reset,
-            logging.CRITICAL: bold_red + format + reset
-        }
-
-        def format(self, record):
-            log_fmt = self.FORMATS.get(record.levelno)
-            formatter = logging.Formatter(log_fmt)
-            return formatter.format(record)
-    
-    logging.getLogger("httpx").setLevel(logging.WARNING)
-    logging.getLogger("multilspy").setLevel(logging.FATAL)
-    logger = logging.getLogger("HyperAgent")
-    logger.setLevel(logging.DEBUG)
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)
-
-    ch.setFormatter(CustomFormatter())
-
-    logger.addHandler(ch)
-    return logger
 
 _TEXT_COLOR_MAPPING = {
     "blue": "36;1",
@@ -479,7 +482,7 @@ _TEXT_COLOR_MAPPING = {
 
 
 def get_color_mapping(
-    items: List[str], excluded_colors: Optional[List] = None
+        items: List[str], excluded_colors: Optional[List] = None
 ) -> Dict[str, str]:
     """Get mapping for items to a support color."""
     colors = list(_TEXT_COLOR_MAPPING.keys())
@@ -501,21 +504,23 @@ def get_bolded_text(text: str) -> str:
 
 
 def print_text(
-    text: str, color: Optional[str] = None, end: str = "", file: Optional[TextIO] = None
+        text: str, color: Optional[str] = None, end: str = "", file: Optional[TextIO] = None
 ) -> None:
     """Print text with highlighting and no end characters."""
     text_to_print = get_colored_text(text, color) if color else text
     print(text_to_print, end=end, file=file)
-    
+
+
 def extract_patch(
-    repo_dir: str
+        repo_dir: str
 ) -> str:
     random_name = generate_random_string(8)
     os.system(f"cd {repo_dir} && git diff HEAD > {DEFAULT_PATCHES_DIR}/{random_name}.diff")
-    
+
     with open(f"{DEFAULT_PATCHES_DIR}/{random_name}.diff", "r") as f:
         patch = f.read()
     return patch
+
 
 def find_matching_abs_path(parent_folder, sub_path):
     # Walk through the parent folder to find matching sub-path
@@ -527,25 +532,28 @@ def find_matching_abs_path(parent_folder, sub_path):
                 return os.path.abspath(full_path)
     return None
 
+
 def find_all_file_paths(parent_folder, file_name):
-  """Finds all paths of files with the given name in a parent folder.
+    """Finds all paths of files with the given name in a parent folder.
 
-  Args:
-    parent_folder: The path to the parent folder.
-    file_name: The name of the file to find.
+    Args:
+      parent_folder: The path to the parent folder.
+      file_name: The name of the file to find.
 
-  Returns:
-    A list of all full paths to the files if found, otherwise an empty list.
-  """
+    Returns:
+      A list of all full paths to the files if found, otherwise an empty list.
+    """
 
-  file_paths = []
-  for root, _, files in os.walk(parent_folder):
-    if file_name in files:
-      file_paths.append(os.path.join(root, file_name))
+    file_paths = []
+    for root, _, files in os.walk(parent_folder):
+        if file_name in files:
+            file_paths.append(os.path.join(root, file_name))
 
-  return file_paths
+    return file_paths
+
 
 from pathlib import Path
+
 
 def find_matching_file_path(parent_folder, sub_file_path):
     for root, dirs, files in os.walk(parent_folder):
@@ -553,12 +561,13 @@ def find_matching_file_path(parent_folder, sub_file_path):
             full_path = os.path.join(root, name)
             if full_path.endswith(sub_file_path):
                 return Path(full_path).resolve()
-    
+
     file_paths = find_all_file_paths(parent_folder, sub_file_path.split("/")[-1])
     if len(file_paths) == 1:
         return Path(file_paths[0]).resolve()
 
     return None
+
 
 if __name__ == "__main__":
     print(find_matching_file_path("/datadrive5/huypn16/HyperAgent-Master", "hyperagent/prompts/executor.py"))
