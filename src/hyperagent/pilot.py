@@ -126,6 +126,8 @@ class HyperAgent:
         self.verbose = verbose
 
     def query_codebase(self, query):
+        logger = get_logger()
+        logger.info(f"User query: \n{query}")
         return self.user_proxy.initiate_chat(
             self.system, message=query, silent=self.verbose
         )
