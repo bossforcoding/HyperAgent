@@ -128,6 +128,11 @@ class HyperAgent:
     def query_codebase(self, query):
         logger = get_logger()
         logger.info(f"User query: \n{query}")
-        return self.user_proxy.initiate_chat(
+
+        chat_result = self.user_proxy.initiate_chat(
             self.system, message=query, silent=self.verbose
         )
+
+        logger.info(chat_result)
+
+        return chat_result
