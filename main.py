@@ -1,4 +1,5 @@
 import logging
+import shutil
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
 
@@ -6,6 +7,7 @@ from hyperagent import HyperAgent
 
 # Constants
 DEFAULT_PROMPT = "How to add new memory efficient fine-tuning technique to the project?"
+CACHE_PATH = Path(".cache")
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -21,6 +23,18 @@ def parse():
     parser.add_argument("--language", type=str, default="python")
     parser.add_argument("--clone_dir", type=str, default="data/repos")
 
+    # Clean-up options
+    parser.add_argument(
+        "--clear-cache",
+        action="store_true",
+        help="Clear the cache before running"
+    )
+    parser.add_argument(
+        "--clear-clone-dir",
+        action="store_true",
+        help="Delete and recreate the clone directory for a fresh start"
+    )
+
     # Mutually exclusive prompt options
     group = parser.add_mutually_exclusive_group()
     group.add_argument(
@@ -35,6 +49,23 @@ def parse():
     )
 
     return parser.parse_args()
+
+
+def cleanup_environment(args: Namespace) -> None:
+    """Clean up cache and/or clone directory if requested."""
+    if args.clear_clone_dir:
+        clone_path = Path(args.clone_dir)
+        if clone_path.exists():
+            logger.info(f"Removing clone directory: {clone_path}")
+            shutil.rmtree(clone_path)
+            clone_path.mkdir(parents=True, exist_ok=True)
+            logger.info("Clone directory cleared")
+
+    if args.clear_cache:
+        if CACHE_PATH.exists():
+            logger.info(f"Removing cache directory: {CACHE_PATH}")
+            shutil.rmtree(CACHE_PATH)
+            logger.info("Cache directory cleared")
 
 
 def load_prompt(args: Namespace) -> str:
@@ -83,6 +114,9 @@ def load_prompt(args: Namespace) -> str:
 if __name__ == "__main__":
     logger.info("Start!")
     args = parse()
+
+    # Clean up environment if requested
+    cleanup_environment(args)
 
     # Load prompt
     prompt = load_prompt(args)
