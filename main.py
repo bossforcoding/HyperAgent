@@ -84,10 +84,10 @@ if __name__ == "__main__":
     logger.info("Start!")
     args = parse()
 
-    # Load prompt (preserving all formatting)
+    # Load prompt
     prompt = load_prompt(args)
 
     pilot = HyperAgent(args.repo, commit=args.commit, language=args.language, clone_dir=args.clone_dir)
     logger.info("Setup done!")
 
-    print(pilot.query_codebase(args.prompt))
+    print(pilot.query_codebase(prompt))
